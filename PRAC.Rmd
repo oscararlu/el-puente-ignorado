@@ -1,0 +1,706 @@
+---
+title: "PRA2 - Visualización de datos energéticos"
+author: "Oscar Arroyo"
+date: "2026-06-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+---
+
+# 0. Carga de librerías y datos
+
+## Librerías
+
+```{r librerias}
+library(tidyverse)
+library(janitor)
+library(readr)
+library(tidyr)
+library(stringr)
+library(lubridate)
+library(plotly)
+library(leaflet)
+```
+
+## Carga de datos
+
+```{r carga_datos}
+owid_energy <- read_csv(
+  "owid-energy-data.csv",
+  show_col_types = FALSE
+) %>%
+  clean_names()
+
+geo_nuclear <- read_csv(
+  "nuclear_power_plants.csv",
+  show_col_types = FALSE
+) %>%
+  clean_names()
+
+power_plants <- read_csv(
+  "global_power_plant_database.csv",
+  show_col_types = FALSE
+) %>%
+  clean_names()
+
+nrg_pc_204 <- read_tsv(
+  "estat_nrg_pc_204 (1).tsv",
+  show_col_types = FALSE
+)
+```
+
+## Limpieza básica
+
+### OWID
+
+```{r limpieza_owid}
+owid_energy <- owid_energy %>%
+  filter(!is.na(iso_code)) %>%
+  filter(
+    !country %in% c(
+      "World", "Europe", "Asia", "Africa",
+      "North America", "South America", "Oceania"
+    )
+  )
+```
+
+### GeoNuclear
+
+```{r limpieza_geonuclear}
+geo_nuclear <- geo_nuclear %>%
+  mutate(
+    status       = as.factor(status),
+    reactor_type = as.factor(reactor_type),
+    closure_age  = as.numeric(operational_to - operational_from) / 365.25
+  )
+```
+
+### Precio electricidad (Eurostat)
+
+```{r limpieza_eurostat}
+electricity_price <- nrg_pc_204 %>%
+  separate(
+    `freq,siec,nrg_cons,unit,tax,currency,geo\\TIME_PERIOD`,
+    into = c("freq", "siec", "nrg_cons", "unit", "tax", "currency", "geo"),
+    sep  = ","
+  )
+
+electricity_price_long <- electricity_price %>%
+  pivot_longer(
+    cols      = starts_with("20"),
+    names_to  = "period",
+    values_to = "price"
+  ) %>%
+  mutate(
+    price = str_extract(price, "[0-9.]+"),
+    price = as.numeric(price)
+  )
+
+viz4_price_yearly <- electricity_price_long %>%
+  filter(
+    geo      %in% c("DE", "FR"),
+    nrg_cons == "KWH2500-4999",
+    tax      == "I_TAX"
+  ) %>%
+  mutate(
+    country = case_when(
+      geo == "DE" ~ "Germany",
+      geo == "FR" ~ "France"
+    ),
+    year = as.numeric(substr(period, 1, 4))
+  ) %>%
+  group_by(country, year) %>%
+  summarise(electricity_price = mean(price, na.rm = TRUE), .groups = "drop")
+```
+
+
+---
+
+# VIZ 1 — El mapa del mundo nuclear
+
+Muestra la distribución geográfica de los reactores nucleares: operativos, cerrados y en construcción.
+
+## Preparación de datos
+
+```{r viz1_datos}
+viz1_data <- geo_nuclear %>%
+  select(name, country, latitude, longitude, status, capacity, reactor_type) %>%
+  filter(!is.na(latitude), !is.na(longitude))
+```
+
+## Visualización
+
+```{r viz1_mapa}
+pal <- colorFactor(
+  palette = c("#2E8B57", "#B22222", "#FF8C00", "#4169E1"),
+  domain  = viz1_data$status
+)
+
+leaflet(viz1_data) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    lng         = ~longitude,
+    lat         = ~latitude,
+    radius      = ~sqrt(capacity) / 2,
+    color       = ~pal(status),
+    stroke      = FALSE,
+    fillOpacity = 0.8,
+    popup       = ~paste0(
+      "<b>", name, "</b><br>",
+      country, "<br>",
+      "Status: ", status, "<br>",
+      "Capacity: ", capacity, " MW"
+    )
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal    = pal,
+    values = ~status,
+    title  = "Reactor Status"
+  )
+```
+
+
+---
+
+# VIZ 2 — El mix que no fue: Alemania vs Francia
+
+Evolución del mix eléctrico alemán y francés desde 2000, con las importaciones netas como contexto.
+
+## Preparación de datos
+
+```{r viz2_datos}
+# Mix Alemania
+viz2_data <- owid_energy %>%
+  filter(country == "Germany", year >= 2000) %>%
+  select(year, nuclear_electricity, coal_electricity, gas_electricity, renewables_electricity) %>%
+  pivot_longer(-year, names_to = "source", values_to = "generation_twh") %>%
+  mutate(
+    source = recode(
+      source,
+      nuclear_electricity    = "Nuclear",
+      coal_electricity       = "Coal",
+      gas_electricity        = "Gas",
+      renewables_electricity = "Renewables"
+    )
+  )
+
+# Importaciones Alemania
+viz2_imports <- owid_energy %>%
+  filter(country == "Germany", year >= 2000) %>%
+  select(year, net_elec_imports)
+
+# Mix Francia
+viz2_france <- owid_energy %>%
+  filter(country == "France", year >= 2000) %>%
+  select(year, nuclear_electricity, coal_electricity, gas_electricity, renewables_electricity) %>%
+  pivot_longer(-year, names_to = "source", values_to = "generation_twh") %>%
+  mutate(
+    source = recode(
+      source,
+      nuclear_electricity    = "Nuclear",
+      coal_electricity       = "Coal",
+      gas_electricity        = "Gas",
+      renewables_electricity = "Renewables"
+    )
+  )
+
+# Importaciones Francia
+viz2_france_imports <- owid_energy %>%
+  filter(country == "France", year >= 2000) %>%
+  select(year, net_elec_imports)
+```
+
+## Visualización — Alemania
+
+```{r viz2_alemania}
+p <- plot_ly()
+
+for (src in unique(viz2_data$source)) {
+  temp <- viz2_data %>% filter(source == src)
+  p <- p %>%
+    add_trace(
+      data          = temp,
+      x             = ~year,
+      y             = ~generation_twh,
+      name          = src,
+      type          = "scatter",
+      mode          = "lines",
+      stackgroup    = "one",
+      hovertemplate = paste(
+        "<b>", src, "</b><br>",
+        "Año: %{x}<br>",
+        "Generación: %{y:.1f} TWh",
+        "<extra></extra>"
+      )
+    )
+}
+
+p %>%
+  add_lines(
+    data          = viz2_imports,
+    x             = ~year,
+    y             = ~net_elec_imports,
+    name          = "Net Imports",
+    yaxis         = "y2",
+    line          = list(color = "black", width = 3, dash = "dash"),
+    hovertemplate = paste(
+      "<b>Importaciones netas</b><br>",
+      "Año: %{x}<br>",
+      "%{y:.1f} TWh",
+      "<extra></extra>"
+    )
+  ) %>%
+  layout(
+    title      = "Alemania: del cierre nuclear a las importaciones eléctricas",
+    hovermode  = "x unified",
+    legend     = list(title = list(text = "<b>Fuente</b>")),
+    xaxis      = list(title = "Año"),
+    yaxis      = list(title = "Generación eléctrica (TWh)"),
+    yaxis2     = list(title = "Importaciones netas (TWh)", overlaying = "y", side = "right")
+  )
+```
+
+## Visualización — Francia
+
+```{r viz2_francia}
+p <- plot_ly()
+
+for (src in unique(viz2_france$source)) {
+  temp <- viz2_france %>% filter(source == src)
+  p <- p %>%
+    add_trace(
+      data          = temp,
+      x             = ~year,
+      y             = ~generation_twh,
+      name          = src,
+      type          = "scatter",
+      mode          = "lines",
+      stackgroup    = "one",
+      hovertemplate = paste(
+        "<b>", src, "</b><br>",
+        "Año: %{x}<br>",
+        "Generación: %{y:.1f} TWh",
+        "<extra></extra>"
+      )
+    )
+}
+
+p %>%
+  add_lines(
+    data          = viz2_france_imports,
+    x             = ~year,
+    y             = ~net_elec_imports,
+    name          = "Net Imports",
+    yaxis         = "y2",
+    line          = list(color = "black", width = 3, dash = "dash"),
+    hovertemplate = paste(
+      "<b>Importaciones netas</b><br>",
+      "Año: %{x}<br>",
+      "%{y:.1f} TWh",
+      "<extra></extra>"
+    )
+  ) %>%
+  layout(
+    title      = "Francia: una transición apoyada en la energía nuclear",
+    hovermode  = "x unified",
+    legend     = list(title = list(text = "<b>Fuente</b>")),
+    xaxis      = list(title = "Año"),
+    yaxis      = list(title = "Generación eléctrica (TWh)"),
+    yaxis2     = list(title = "Importaciones netas (TWh)", overlaying = "y", side = "right"),
+    annotations = list(
+      list(x = 2022, y = max(viz2_france$generation_twh, na.rm = TRUE) * 0.9,
+           text = "Crisis energética europea", showarrow = TRUE, arrowhead = 2)
+    )
+  )
+```
+
+
+---
+
+# VIZ 3 — Francia vs Alemania: intensidad de carbono
+
+Comparación de la intensidad de carbono en la generación eléctrica entre Francia y Alemania.
+
+## Preparación de datos
+
+```{r viz3_datos}
+viz3_data <- owid_energy %>%
+  filter(country %in% c("Germany", "France"), year >= 2000) %>%
+  select(country, year, carbon_intensity_elec) %>%
+  drop_na()
+```
+
+## Visualización
+
+```{r viz3_grafico}
+plot_ly(
+  viz3_data,
+  x             = ~year,
+  y             = ~carbon_intensity_elec,
+  color         = ~country,
+  type          = "scatter",
+  mode          = "lines"
+) %>%
+  layout(
+    title  = "Intensidad de carbono de la electricidad: Francia vs Alemania",
+    xaxis  = list(title = "Año"),
+    yaxis  = list(title = "gCO₂ / kWh"),
+    legend = list(title = list(text = "<b>País</b>"))
+  )
+```
+
+
+---
+
+# VIZ 4 — Emisiones + precio de la electricidad
+
+Relación entre la intensidad de carbono y el precio eléctrico doméstico en Alemania y Francia.
+
+## Preparación de datos
+
+```{r viz4_datos}
+viz4_carbon <- owid_energy %>%
+  filter(country %in% c("Germany", "France"), year >= 2000) %>%
+  select(country, year, carbon_intensity_elec) %>%
+  drop_na()
+
+viz4_data <- viz4_price_yearly %>%
+  left_join(viz4_carbon, by = c("country", "year")) %>%
+  mutate(
+    period_policy = case_when(
+      year < 2011 ~ "Pre-Fukushima",
+      TRUE        ~ "Post-Fukushima"
+    )
+  )
+```
+
+## Visualización — Precio eléctrico
+
+```{r viz4_precio}
+plot_ly(
+  data          = viz4_price_yearly,
+  x             = ~year,
+  y             = ~electricity_price,
+  color         = ~country,
+  type          = "scatter",
+  mode          = "lines+markers",
+  hovertemplate = paste(
+    "<b>%{fullData.name}</b><br>",
+    "Año: %{x}<br>",
+    "Precio: %{y:.3f} €/kWh",
+    "<extra></extra>"
+  )
+) %>%
+  layout(
+    title      = "Precio de la electricidad doméstica: Francia vs Alemania",
+    hovermode  = "x unified",
+    xaxis      = list(title = "Año"),
+    yaxis      = list(title = "€/kWh"),
+    legend     = list(title = list(text = "<b>País</b>"))
+  )
+```
+
+## Visualización — Importaciones vs precio relativo (Alemania)
+
+```{r viz4_scatter}
+germany_price_imports <- owid_energy %>%
+  filter(country == "Germany", year >= 2007) %>%
+  select(year, net_elec_imports) %>%
+  left_join(
+    viz4_price_yearly %>% filter(country == "Germany") %>% select(year, electricity_price),
+    by = "year"
+  ) %>%
+  drop_na() %>%
+  mutate(price_index = electricity_price / electricity_price[year == 2010] * 100)
+
+plot_ly(
+  germany_price_imports,
+  x             = ~net_elec_imports,
+  y             = ~price_index,
+  text          = ~year,
+  type          = "scatter",
+  mode          = "markers+text",
+  textposition  = "top center",
+  hovertemplate = paste(
+    "<b>Año %{text}</b><br>",
+    "Importaciones netas: %{x:.1f} TWh<br>",
+    "Índice precio: %{y:.1f}<br>",
+    "<extra></extra>"
+  )
+) %>%
+  layout(
+    title  = "Alemania: importaciones eléctricas y precio relativo",
+    xaxis  = list(title = "Importaciones netas (TWh)"),
+    yaxis  = list(title = "Precio (2010 = 100)")
+  )
+```
+
+
+---
+
+# VIZ 5 — Crecimiento renovable
+
+Evolución de la generación solar y eólica en los principales países europeos.
+
+## Preparación de datos
+
+```{r viz5_datos}
+viz5_data <- owid_energy %>%
+  filter(
+    country %in% c("Germany", "France", "Spain", "United Kingdom"),
+    year >= 2000
+  ) %>%
+  select(country, year, solar_electricity, wind_electricity) %>%
+  pivot_longer(
+    cols      = c(solar_electricity, wind_electricity),
+    names_to  = "technology",
+    values_to = "generation_twh"
+  ) %>%
+  mutate(
+    technology = recode(
+      technology,
+      solar_electricity = "Solar",
+      wind_electricity  = "Wind"
+    )
+  )
+```
+
+## Visualización — Por país (ejemplo: Alemania)
+
+```{r viz5_pais}
+selected_country <- "Germany"
+
+plot_ly(
+  data  = filter(viz5_data, country == selected_country),
+  x     = ~year,
+  y     = ~generation_twh,
+  color = ~technology,
+  type  = "scatter",
+  mode  = "lines"
+) %>%
+  layout(
+    title  = paste("Crecimiento renovable en", selected_country),
+    xaxis  = list(title = "Año"),
+    yaxis  = list(title = "Generación (TWh)"),
+    legend = list(title = list(text = "Tecnología"))
+  )
+```
+
+## Visualización — Comparativa todos los países
+
+```{r viz5_comparativa}
+p <- plot_ly()
+
+p <- p %>%
+  add_trace(
+    data        = filter(viz5_data, technology == "Solar"),
+    x           = ~year,
+    y           = ~generation_twh,
+    color       = ~country,
+    type        = "scatter",
+    mode        = "lines",
+    legendgroup = ~country,
+    name        = ~paste(country, "- Solar"),
+    line        = list(width = 3)
+  )
+
+p <- p %>%
+  add_trace(
+    data        = filter(viz5_data, technology == "Wind"),
+    x           = ~year,
+    y           = ~generation_twh,
+    color       = ~country,
+    type        = "scatter",
+    mode        = "lines",
+    legendgroup = ~country,
+    name        = ~paste(country, "- Wind"),
+    line        = list(width = 3, dash = "dash")
+  )
+
+p %>%
+  layout(
+    title     = "Generación renovable por país",
+    hovermode = "x unified",
+    xaxis     = list(title = "Año"),
+    yaxis     = list(title = "Generación (TWh)"),
+    legend    = list(title = list(text = "<b>País y tecnología</b>"))
+  )
+```
+
+
+---
+
+# VIZ 6 — Los países más limpios de Europa
+
+¿Qué combinación de nuclear y renovables tiene los sistemas eléctricos más limpios?
+
+## Preparación de datos
+
+```{r viz6_datos}
+latest_year <- max(owid_energy$year, na.rm = TRUE)
+
+europe_countries <- c(
+  "Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus",
+  "Czech Republic", "Denmark", "Estonia", "Finland",
+  "France", "Germany", "Greece", "Hungary", "Ireland",
+  "Italy", "Latvia", "Lithuania", "Luxembourg",
+  "Malta", "Netherlands", "Poland", "Portugal",
+  "Romania", "Slovakia", "Slovenia", "Spain",
+  "Sweden", "Norway", "Switzerland", "United Kingdom"
+)
+
+viz6_europe <- owid_energy %>%
+  filter(year == latest_year, country %in% europe_countries) %>%
+  select(country, nuclear_share_elec, renewables_share_elec, low_carbon_share_elec) %>%
+  arrange(desc(low_carbon_share_elec))
+
+top5 <- viz6_europe %>%
+  slice_head(n = 5)
+
+germany_rank <- which(viz6_europe$country == "Germany")
+germany_row  <- viz6_europe %>% filter(country == "Germany")
+
+viz6_subset <- bind_rows(germany_row, top5)
+
+viz6_subset <- viz6_subset %>%
+  mutate(
+    country_label = if_else(
+      country == "Germany",
+      paste0("Germany (#", germany_rank, ")"),
+      country
+    )
+  )
+
+viz6_subset_long <- viz6_subset %>%
+  pivot_longer(
+    cols      = c(nuclear_share_elec, renewables_share_elec),
+    names_to  = "source",
+    values_to = "share"
+  ) %>%
+  mutate(
+    source = recode(
+      source,
+      nuclear_share_elec    = "Nuclear",
+      renewables_share_elec = "Renewables"
+    )
+  )
+```
+
+## Visualización — Barras apiladas: nuclear + renovables
+
+```{r viz6_barras}
+# Con 6 barras (0 a 5 en paper), la línea va entre la barra 0 (Germany) y la 1 (primer top5)
+# Cada barra ocupa 1/6 del espacio → el separador va en 1/6 = 0.1667
+
+n_bars    <- nrow(viz6_subset)          # 6
+line_y    <- 1 / n_bars                 # posición paper entre barra 0 y barra 1
+
+plot_ly(
+  viz6_subset_long,
+  x             = ~share,
+  y             = ~factor(country_label, levels = y_order),
+  color         = ~source,
+  colors        = c("Nuclear" = "#8EB4D8", "Renewables" = "#8FBC8F"),
+  type          = "bar",
+  orientation   = "h",
+  hovertemplate = paste(
+    "<b>%{y}</b><br>",
+    "%{fullData.name}: %{x:.1f}%<br>",
+    "<extra></extra>"
+  )
+) %>%
+  layout(
+    title   = "¿Qué tienen en común los sistemas eléctricos más limpios de Europa?",
+    barmode = "stack",
+    xaxis   = list(title = "% de generación eléctrica", range = c(0, 110)),
+    yaxis   = list(title = ""),
+    legend  = list(title = list(text = "<b>Fuente</b>")),
+    shapes  = list(
+      list(
+        type  = "line",
+        x0    = 0,       x1    = 1,
+        xref  = "paper",
+        y0    = line_y,  y1    = line_y,
+        yref  = "paper",
+        line  = list(color = "grey60", width = 1.5, dash = "dot")
+      )
+    ),
+    annotations = list(
+      list(
+        x         = 1.02, xref = "paper",
+        y         = (line_y + 1) / 2,   # centro de la zona top5
+        yref      = "paper",
+        text      = "<i>Top 5</i>",
+        showarrow = FALSE,
+        xanchor   = "left",
+        font      = list(size = 11, color = "grey50")
+      ),
+      list(
+        x         = 1.02, xref = "paper",
+        y         = line_y / 2,          # centro de la zona Alemania
+        yref      = "paper",
+        text      = "<i>Referencia</i>",
+        showarrow = FALSE,
+        xanchor   = "left",
+        font      = list(size = 11, color = "grey50")
+      )
+    ),
+    margin = list(r = 80)   # espacio para las etiquetas a la derecha
+  )
+```
+
+
+---
+
+# VIZ 7 — El futuro posible: reactores en construcción
+
+Mapa de los reactores nucleares actualmente en construcción o planificados.
+
+## Preparación de datos
+
+```{r viz7_datos}
+viz7_data <- geo_nuclear %>%
+  filter(status %in% c("Under Construction", "Planned")) %>%
+  select(name, country, latitude, longitude, reactor_type, status, capacity) %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  arrange(desc(capacity))
+
+# Eventos de política energética relevantes
+policy_events <- tibble(
+  year  = c(2011, 2023),
+  label = c("Fukushima", "Últimos reactores cerrados")
+)
+
+# Resumen comparativo Alemania vs Francia (último año disponible)
+germany_france_summary <- owid_energy %>%
+  filter(
+    country %in% c("Germany", "France"),
+    year == max(year, na.rm = TRUE)
+  ) %>%
+  select(country, carbon_intensity_elec, nuclear_share_elec, renewables_share_elec, low_carbon_share_elec)
+```
+
+## Visualización
+
+```{r viz7_mapa}
+leaflet(viz7_data) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    lng    = ~longitude,
+    lat    = ~latitude,
+    radius = ~sqrt(capacity) / 2,
+    popup  = ~paste0(
+      "<b>", name, "</b><br>",
+      country, "<br>",
+      reactor_type, "<br>",
+      "Estado: ", status, "<br>",
+      "Capacidad: ", capacity, " MW"
+    )
+  )
+```
