@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Europa Nuclear — Una historia de energía</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:         #0e0f13;
+      --bg2:        #14151b;
+      --bg3:        #1c1e27;
+      --surface:    #22253000;
+      --border:     rgba(255,255,255,0.07);
+      --text:       #e8e6df;
+      --muted:      #888480;
+      --accent:     #c8a97e;       /* ámbar cálido */
+      --accent2:    #7eafc8;       /* azul pastel */
+      --green:      #8fbc8f;
+      --red:        #c87e7e;
+      --line:       rgba(200,169,126,0.25);
+      --serif:      'DM Serif Display', Georgia, serif;
+      --sans:       'DM Sans', sans-serif;
+      --mono:       'DM Mono', monospace;
+      --max:        860px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-weight: 300;
+      line-height: 1.75;
+      font-size: 17px;
+    }
+
+    /* ─── BARRA LATERAL DE PROGRESO ─── */
+    #progress-bar {
+      position: fixed;
+      top: 0; left: 0;
+      width: 0%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      z-index: 1000;
+      transition: width 0.1s linear;
+    }
+
+    /* ─── NAV LATERAL ─── */
+    nav#chapters {
+      position: fixed;
+      top: 50%;
+      right: 28px;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 900;
+    }
+
+    nav#chapters a {
+      display: block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      opacity: 0.4;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    nav#chapters a.active,
+    nav#chapters a:hover {
+      background: var(--accent);
+      opacity: 1;
+      transform: scale(1.4);
+    }
+
+    nav#chapters a::before {
+      content: attr(data-label);
+      position: absolute;
+      right: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    nav#chapters a:hover::before { opacity: 1; }
+
+    /* ─── HERO ─── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 30% 60%, rgba(200,169,126,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 75% 30%, rgba(126,175,200,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-eyebrow {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.2s forwards;
+    }
+
+    #hero h1 {
+      font-family: var(--serif);
+      font-size: clamp(2.8rem, 7vw, 5.5rem);
+      line-height: 1.08;
+      max-width: 780px;
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.4s forwards;
+    }
+
+    #hero h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      max-width: 560px;
+      color: var(--muted);
+      font-size: 16px;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.65s forwards;
+    }
+
+    .hero-meta {
+      margin-top: 48px;
+      display: flex;
+      gap: 40px;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.85s forwards;
+    }
+
+    .hero-meta span {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      animation: fadeUp 1s 1.2s forwards;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-family: var(--mono);
+    }
+
+    .scroll-hint::after {
+      content: '';
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+      animation: lineDown 1.5s 1.5s ease-in-out infinite;
+    }
+
+    /* ─── LAYOUT PRINCIPAL ─── */
+    main {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0 24px 120px;
+    }
+
+    /* ─── SECCIONES ─── */
+    .chapter {
+      padding-top: 100px;
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .chapter.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── CABECERA DE CAPÍTULO ─── */
+    .chapter-header {
+      margin-bottom: 40px;
+    }
+
+    .chapter-number {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .chapter h2 {
+      font-family: var(--serif);
+      font-size: clamp(1.7rem, 4vw, 2.6rem);
+      line-height: 1.15;
+      margin-bottom: 18px;
+    }
+
+    .chapter h2 em { font-style: italic; color: var(--accent); }
+
+    .lead {
+      font-size: 18px;
+      line-height: 1.8;
+      color: #c8c4bb;
+      border-left: 2px solid var(--accent);
+      padding-left: 20px;
+      margin-bottom: 28px;
+    }
+
+    .body-text {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.85;
+      margin-bottom: 20px;
+    }
+
+    /* ─── HIGHLIGHT BOXES ─── */
+    .highlight-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 32px 0;
+    }
+
+    .highlight {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+
+    .highlight .val {
+      font-family: var(--serif);
+      font-size: 2rem;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .highlight .label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* ─── IFRAMES ─── */
+    .viz-wrap {
+      margin: 36px 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg2);
+    }
+
+    .viz-wrap iframe {
+      width: 100%;
+      height: 520px;
+      border: none;
+      display: block;
+    }
+
+    .viz-wrap.map iframe { height: 480px; }
+    .viz-wrap.tall  iframe { height: 600px; }
+
+    .viz-caption {
+      padding: 14px 20px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg3);
+    }
+
+    /* ─── SEPARADOR ENTRE CAPÍTULOS ─── */
+    .divider {
+      width: 1px;
+      height: 80px;
+      background: linear-gradient(to bottom, transparent, var(--line), transparent);
+      margin: 0 auto;
+      margin-top: 80px;
+    }
+
+    /* ─── CITA / CALLOUT ─── */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 16px 24px;
+      margin: 32px 0;
+      background: rgba(200,169,126,0.05);
+      border-radius: 0 8px 8px 0;
+      font-family: var(--serif);
+      font-size: 1.15rem;
+      font-style: italic;
+      color: #d8d2c8;
+      line-height: 1.6;
+    }
+
+    /* ─── CONCLUSIÓN ─── */
+    #conclusion {
+      padding-top: 100px;
+      text-align: center;
+    }
+
+    #conclusion h2 {
+      font-family: var(--serif);
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      margin-bottom: 20px;
+    }
+
+    #conclusion p {
+      max-width: 620px;
+      margin: 0 auto 16px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .sources {
+      margin-top: 60px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .sources h3 {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .sources ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sources li {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .sources li::before {
+      content: '→ ';
+      color: var(--accent);
+    }
+
+    /* ─── ANIMACIONES ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes lineDown {
+      0%, 100% { opacity: 0.3; transform: scaleY(0.6); }
+      50%       { opacity: 1;   transform: scaleY(1); }
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 640px) {
+      nav#chapters { display: none; }
+      .highlight-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress-bar"></div>
+
+  <!-- Navegación lateral por capítulos -->
+  <nav id="chapters">
+    <a href="#hero"        data-label="Inicio"></a>
+    <a href="#viz1"        data-label="Mapa nuclear"></a>
+    <a href="#viz2"        data-label="Mix eléctrico"></a>
+    <a href="#viz3"        data-label="CO₂: FR vs DE"></a>
+    <a href="#viz4"        data-label="Precio y emisiones"></a>
+    <a href="#viz5"        data-label="Renovables"></a>
+    <a href="#viz6"        data-label="Países más limpios"></a>
+    <a href="#viz7"        data-label="Futuro nuclear"></a>
+    <a href="#conclusion"  data-label="Conclusión"></a>
+  </nav>
+
+  <!-- ═══════════════════════════ HERO ═══════════════════════════ -->
+  <section id="hero">
+    <p class="hero-eyebrow">Visualización de datos energéticos · PRA2</p>
+    <h1>El átomo que <em>Europa</em> no supo olvidar</h1>
+    <p class="hero-sub">
+      Un recorrido por los datos de generación eléctrica, emisiones y política energética
+      que explican por qué la decisión nuclear importa más que nunca.
+    </p>
+    <div class="hero-meta">
+      <span>Oscar Arroyo</span>
+      <span>Fuentes: OWID · GeoNuclear · Eurostat</span>
+      <span>2026</span>
+    </div>
+    <div class="scroll-hint">scroll</div>
+  </section>
+
+  <main>
+
+    <!-- ═══════════════════════════ VIZ 1 ═══════════════════════════ -->
+    <section class="chapter" id="viz1">
+      <div class="chapter-header">
+        <p class="chapter-number">01 — El mapa</p>
+        <h2>El mundo nuclear, <em>reactor a reactor</em></h2>
+        <p class="lead">
+          Más de 400 reactores operativos, centenares clausurados y una nueva generación
+          en construcción. La geografía nuclear no es aleatoria: refleja décadas de
+          decisiones políticas, accidentes y ambición tecnológica.
+        </p>
+        <p class="body-text">
+          Cada círculo representa una central. Su tamaño es proporcional a la capacidad
+          instalada en megavatios. Francia y Estados Unidos concentran la mayor potencia
+          operativa; mientras que Europa del Este lidera la construcción de nuevos reactores.
+        </p>
+      </div>
+
+      <div class="highlight-row">
+        <div class="highlight">
+          <span class="val">440+</span>
+          <span class="label">Reactores operativos</span>
+        </div>
+        <div class="highlight">
+          <span class="val">200+</span>
+          <span class="label">Reactores cerrados</span>
+        </div>
+        <div class="highlight">
+          <span class="val">60+</span>
+          <span class="label">En construcción</span>
+        </div>
+      </div>
+
+      <div class="viz-wrap map">
+        <iframe src="viz1_mapa_nuclear.html" title="Mapa mundial de reactores nucleares"></iframe>
+        <p class="viz-caption">Fuente: GeoNuclear Database · Tamaño proporcional a capacidad (MW)</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ VIZ 2 ═══════════════════════════ -->
+    <section class="chapter" id="viz2">
+      <div class="chapter-header">
+        <p class="chapter-number">02 — El experimento</p>
+        <h2>El mix que <em>no fue</em>: Alemania y Francia</h2>
+        <p class="lead">
+          Después de Fukushima en 2011, Alemania aceleró el cierre de sus centrales nucleares.
+          Francia, en cambio, mantuvo su apuesta. Dos países vecinos, dos caminos opuestos.
+        </p>
+        <p class="body-text">
+          Alemania apostó por las renovables para cubrir el hueco nuclear, pero el carbón y el gas
+          actuaron como red de seguridad durante la transición. Las importaciones netas crecieron
+          en los años críticos. Francia, exportadora histórica de electricidad, vio cómo su
+          envejecida flota nuclear generaba tensiones en 2022, pero siguió siendo el sistema
+          eléctrico más nuclear de Europa.
+        </p>
+      </div>
+
+      <div class="viz-wrap">
+        <iframe src="viz2_alemania.html" title="Mix eléctrico Alemania"></iframe>
+        <p class="viz-caption">Alemania: evolución del mix eléctrico 2000–2024 · Área apilada + importaciones netas</p>
+      </div>
+
+      <div class="viz-wrap" style="margin-top: 24px;">
+        <iframe src="viz2_francia.html" title="Mix eléctrico Francia"></iframe>
+        <p class="viz-caption">Francia: evolución del mix eléctrico 2000–2024 · Área apilada + importaciones netas</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ VIZ 3 ═══════════════════════════ -->
+    <section class="chapter" id="viz3">
+      <div class="chapter-header">
+        <p class="chapter-number">03 — La huella</p>
+        <h2>¿Quién contamina más al <em>encender la luz</em>?</h2>
+        <p class="lead">
+          La intensidad de carbono mide los gramos de CO₂ emitidos por cada kilovatio-hora generado.
+          Es el indicador más honesto del impacto climático de un sistema eléctrico.
+        </p>
+        <p class="body-text">
+          Francia lleva décadas por debajo de los 100 gCO₂/kWh gracias al nuclear. Alemania
+          superó los 500 gCO₂/kWh durante años, y aunque ha mejorado con las renovables,
+          la brecha sigue siendo enorme. Fukushima marcó un antes y un después: en el año
+          del accidente, Alemania cerró 8 reactores de golpe y sus emisiones repuntaron.
+        </p>
+      </div>
+
+      <blockquote>
+        "Cerrar el nuclear sin tener las renovables listas no es una transición energética:
+        es un rescate temporal del gas y el carbón."
+      </blockquote>
+
+      <div class="viz-wrap">
+        <iframe src="viz3_co2.html" title="Intensidad de carbono Francia vs Alemania"></iframe>
+        <p class="viz-caption">Intensidad de carbono eléctrica · gCO₂/kWh · Fuente: Our World in Data</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ VIZ 4 ═══════════════════════════ -->
+    <section class="chapter" id="viz4">
+      <div class="chapter-header">
+        <p class="chapter-number">04 — El coste</p>
+        <h2>Más sucio <em>y más caro</em></h2>
+        <p class="lead">
+          Si Alemania pagó el precio ambiental del cierre nuclear, ¿al menos se ahorró
+          en la factura eléctrica? Los datos dicen que no.
+        </p>
+        <p class="body-text">
+          El precio de la electricidad doméstica en Alemania es de los más altos de Europa,
+          muy por encima del francés. La dependencia del gas, los costes de red y los impuestos
+          de la transición energética se han trasladado a los consumidores. El gráfico de
+          dispersión muestra además que los años de mayores importaciones coinciden con los
+          índices de precio más elevados.
+        </p>
+      </div>
+
+      <div class="highlight-row">
+        <div class="highlight">
+          <span class="val">~2×</span>
+          <span class="label">Precio DE vs FR (2023)</span>
+        </div>
+        <div class="highlight">
+          <span class="val">2011</span>
+          <span class="label">Punto de inflexión</span>
+        </div>
+      </div>
+
+      <div class="viz-wrap">
+        <iframe src="viz4_precio.html" title="Precio electricidad Francia vs Alemania"></iframe>
+        <p class="viz-caption">Precio electricidad doméstica €/kWh · Eurostat · Segmento 2500–4999 kWh/año con impuestos</p>
+      </div>
+
+      <div class="viz-wrap" style="margin-top: 24px;">
+        <iframe src="viz4_scatter.html" title="Importaciones vs precio relativo Alemania"></iframe>
+        <p class="viz-caption">Alemania: importaciones netas (TWh) vs índice de precio eléctrico (base 2010 = 100)</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ VIZ 5 ═══════════════════════════ -->
+    <section class="chapter" id="viz5">
+      <div class="chapter-header">
+        <p class="chapter-number">05 — La promesa</p>
+        <h2>El despegue <em>renovable</em></h2>
+        <p class="lead">
+          Solar y eólica han crecido de forma exponencial. Pero la velocidad del despliegue
+          varía mucho según el país, y la intermitencia plantea un reto que la nuclear
+          no tiene.
+        </p>
+        <p class="body-text">
+          Alemania lidera en potencia eólica instalada; España destaca en solar. Francia,
+          que no necesitó grandes renovables gracias al nuclear, llega tarde a esta carrera.
+          El Reino Unido combina eólica offshore con un renovado interés en la energía nuclear
+          de nueva generación.
+        </p>
+      </div>
+
+      <div class="viz-wrap tall">
+        <iframe src="viz5_renovables.html" title="Crecimiento renovable por país"></iframe>
+        <p class="viz-caption">Generación solar y eólica (TWh) · Alemania, Francia, España, Reino Unido · 2000–2024</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ VIZ 6 ═══════════════════════════ -->
+    <section class="chapter" id="viz6">
+      <div class="chapter-header">
+        <p class="chapter-number">06 — El patrón</p>
+        <h2>Los más limpios tienen algo <em>en común</em></h2>
+        <p class="lead">
+          Si miramos qué países europeos tienen la electricidad más baja en carbono,
+          el patrón es consistente: todos combinan nuclear o renovables en grandes proporciones.
+          Nunca uno sin el otro, o solo con gas.
+        </p>
+        <p class="body-text">
+          Noruega es la excepción renovable pura (casi todo hidráulica). Francia lidera
+          gracias al nuclear. Suecia combina ambas fuentes con maestría. Alemania, pese
+          a su inversión renovable, queda muy atrás por su dependencia residual del carbón y gas.
+        </p>
+      </div>
+
+      <div class="viz-wrap tall">
+        <iframe src="viz6_limpios.html" title="Países europeos con electricidad más limpia"></iframe>
+        <p class="viz-caption">Top 5 países europeos + Alemania · % generación nuclear y renovable · Último año disponible</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ VIZ 7 ═══════════════════════════ -->
+    <section class="chapter" id="viz7">
+      <div class="chapter-header">
+        <p class="chapter-number">07 — El horizonte</p>
+        <h2>El futuro que <em>ya se construye</em></h2>
+        <p class="lead">
+          Mientras parte de Europa debate si el nuclear tiene futuro, China, India y
+          varios países del Este ya están construyendo la siguiente generación de reactores.
+        </p>
+        <p class="body-text">
+          El mapa de reactores en construcción y planificados muestra una geografía
+          sorprendentemente activa. Los nuevos reactores son en su mayoría PWR de
+          tercera generación, más seguros y eficientes. Francia ha anunciado la construcción
+          de seis nuevos EPR2; Polonia y los países bálticos dan sus primeros pasos nucleares.
+        </p>
+      </div>
+
+      <div class="viz-wrap map">
+        <iframe src="viz7_futuro.html" title="Reactores en construcción y planificados"></iframe>
+        <p class="viz-caption">Reactores en construcción y planificados · GeoNuclear Database</p>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ═══════════════════════════ CONCLUSIÓN ═══════════════════════════ -->
+    <section id="conclusion">
+      <p class="chapter-number" style="text-align:center; margin-bottom:16px;">Conclusión</p>
+      <h2 style="font-family: var(--serif); font-size: clamp(1.8rem,4vw,2.8rem); margin-bottom:24px;">
+        Los datos tienen <em>una opinión</em>
+      </h2>
+      <p>
+        Los sistemas eléctricos más limpios, más baratos y más estables de Europa
+        comparten un denominador común: una base de generación baja en carbono —nuclear,
+        hidráulica o ambas— sobre la que construir las renovables.
+      </p>
+      <p>
+        El experimento alemán ha producido datos. No son ambiguos. El debate político
+        puede continuar, pero ignorar las métricas de carbono, precio e importaciones
+        ya no es posible sin esfuerzo deliberado.
+      </p>
+      <p>
+        La pregunta no es si Europa necesita energía limpia. La pregunta es si puede
+        permitirse ignorar al átomo mientras la lleva a cabo.
+      </p>
+
+      <div class="sources">
+        <h3>Fuentes de datos</h3>
+        <ul>
+          <li>Our World in Data — Energy Dataset (owid-energy-data.csv)</li>
+          <li>GeoNuclear Database — nuclear_power_plants.csv</li>
+          <li>Global Power Plant Database — WRI</li>
+          <li>Eurostat — Precios electricidad doméstica (nrg_pc_204)</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ── Barra de progreso
+    const bar = document.getElementById('progress-bar');
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement;
+      const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+      bar.style.width = pct + '%';
+    });
+
+    // ── Navegación lateral activa
+    const navLinks = document.querySelectorAll('nav#chapters a');
+    const sections = Array.from(navLinks).map(a => document.querySelector(a.getAttribute('href')));
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(l => l.classList.remove('active'));
+          const link = document.querySelector(`nav#chapters a[href="#${entry.target.id}"]`);
+          if (link) link.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-40% 0px -40% 0px' });
+
+    sections.forEach(s => s && observer.observe(s));
+
+    // ── Reveal on scroll
+    const chapters = document.querySelectorAll('.chapter');
+    const revealObserver = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          revealObserver.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.08 });
+
+    chapters.forEach(c => revealObserver.observe(c));
+  </script>
+
+</body>
+</html>
