@@ -1,4 +1,4 @@
-# El átomo que Europa no supo olvidar
+# El puente olvidado
 ### Visualización de datos energéticos · PRA2
 
 > Un recorrido por los datos de generación eléctrica, emisiones y política energética que explican por qué la decisión nuclear importa más que nunca.
