@@ -3,7 +3,7 @@
 
 > Un recorrido por los datos de generación eléctrica, emisiones y política energética que explican por qué la decisión nuclear importa más que nunca.
 
-🌐 **[Ver la página →](https://TU-USUARIO.github.io/TU-REPO)**
+🌐 **[Ver la página →](https://oscararlu.github.io/el-puente-ignorado/)**
 
 ---
 
